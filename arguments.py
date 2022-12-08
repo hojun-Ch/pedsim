@@ -1,4 +1,5 @@
 import argparse
+import os
 
 def str2bool(v):
     if isinstance(v, bool):
@@ -18,7 +19,32 @@ parser.add_argument(
     default='copo',
     help='policy algo'
 )
-# for COPO
+
+parser.add_argument(
+    '--name',
+    type=str,
+    default='demo',
+    help='name of each trial'
+)
+
+# env path
+parser.add_argument(
+    '--home_path',
+    type=str,
+    default=os.path.expanduser('~'),
+    help='path to home')
+
+parser.add_argument(
+    '--env_path',
+    type=str,
+    default="/Unity/first pedsim/",
+    help='path from home to env folder')
+# for COPO training
+parser.add_argument(
+    '--rendering',
+    type=str2bool,
+    default=False,
+    help='render while training')
 parser.add_argument(
     '--state_dim',
     type=int,
@@ -70,8 +96,8 @@ parser.add_argument(
 parser.add_argument(
     '--buffer_size',
     type=int,
-    default=100,
-    help='size of buffers')
+    default=4000,
+    help='size of buffers (must same with rollout_length)')
 
 parser.add_argument(
     '--ppo_epoch',
@@ -82,7 +108,7 @@ parser.add_argument(
 parser.add_argument(
     '--batch_size',
     type=int,
-    default=32,
+    default=16384,
     help='batch size for training')
 parser.add_argument(
     '--ppo_clip_range',
@@ -122,13 +148,13 @@ parser.add_argument(
 parser.add_argument(
     '--device',
     type=str,
-    default='cpu',
+    default='cuda',
     help='learning device(gpu or cpu)'
 )
 parser.add_argument(
     '--rollout_length',
     type=int,
-    default=100
+    default=4000
 )
 parser.add_argument(
     '--max_step',
@@ -189,6 +215,28 @@ parser.add_argument(
 parser.add_argument(
     '--coll_penalty',
     type=float,
-    default=0.3,
+    default=1.0,
     help='collision penalty'
+)
+
+# for evaluation
+parser.add_argument(
+    '--eval_frequency',
+    type=int,
+    default=10,
+    help='evaluation frequency'
+)
+
+parser.add_argument(
+    '--eval_rendering',
+    type=str2bool,
+    default=False,
+    help='render evaluation'
+)
+
+parser.add_argument(
+    '--model_path',
+    type=str,
+    default='./ckpts/',
+    help='path to saved model'
 )

@@ -87,7 +87,7 @@ class PolicyNetwork(nn.Module):
         action = normal_layer.sample()
         
         log_prob = normal_layer.log_prob(action)
-        
+                
         if len(log_prob.shape) > 1:
             log_prob = log_prob.sum(dim=1)
         else:
@@ -96,7 +96,9 @@ class PolicyNetwork(nn.Module):
         return action, log_prob
 
     def evaluate_action(self, obs, action):
+        
         mu = self.layer(obs)
+        
         normal_layer = Normal(mu, torch.exp(self.log_std))
         
         log_prob = normal_layer.log_prob(action)

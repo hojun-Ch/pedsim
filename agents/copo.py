@@ -81,13 +81,12 @@ class COPO():
         # img= torch.from_numpy(img.astype(np.float32))
         # feature  = torch.from_numpy(feature.astype(np.float32))
         obs = self.state_encoder(img, feature)
-        
-        action, log_prob = self.policy_network(obs)
+            
         i_value = self.i_value_network(obs)
         n_value = self.n_value_network(obs)
         g_value = self.g_value_network(obs)
         
-        log_prob, entropy = self.policy_network.evaluate_action(obs, action)
+        log_prob, entropy = self.policy_network.evaluate_action(obs, actions)
             
         return i_value, n_value, g_value, log_prob, entropy
     
@@ -119,8 +118,9 @@ class COPO():
             value = self.i_value_network(obs)
             n_value = self.n_value_network(obs)
             g_value = self.g_value_network(obs)
+            
         
-        return action.numpy(), log_prob, value, n_value, g_value
+        return action.clone().cpu().numpy(), log_prob, value, n_value, g_value
     
     def get_values(self, img, feature):
         """
@@ -145,10 +145,9 @@ class COPO():
         self.old_policy_network = copy.deepcopy(self.policy_network)
         self.old_state_encoder = copy.deepcopy(self.state_encoder)
         self.old_optimizer = torch.optim.Adam(list(self.old_policy_network.parameters()) + list(self.old_state_encoder.parameters()), lr=self.learning_rate)
-
-        lcf = self.LCF_dist(torch.tensor([0.0]))
+        
+        lcf = self.LCF_dist(torch.tensor([0.0]).to(self.device))
         lcf = torch.clamp(lcf, -math.pi / 2, math.pi / 2)
-
         pg_losses = []
         clip_fractions = []
         entropy_losses = []
@@ -158,7 +157,6 @@ class COPO():
         
         for epoch in range(self.ppo_epoch):
             for rollout_data in self.rollout_buffer.get(self.batch_size):
-                
                 actions = rollout_data.actions
 
                 values, n_values, g_values, log_prob, entropy = self.evaluate_actions(rollout_data.observations, rollout_data.surroundings, actions)
@@ -216,12 +214,14 @@ class COPO():
                 # Optimization step
                 self.optimizer.zero_grad()
                 loss.backward()
+
                 # Clip grad norm
                 torch.nn.utils.clip_grad_norm_(self.policy_network.parameters(), self.max_grad_norm)
                 self.optimizer.step()
                 
+                                
         self.n_updates += self.ppo_epoch
-        return lcf, pg_losses, clip_fractions, g_value_losses, n_value_losses, g_value_losses
+        return lcf, pg_losses, clip_fractions, value_losses, n_value_losses, g_value_losses
     
     def update_lcf(self, lcf):
         losses = []
@@ -265,7 +265,7 @@ class COPO():
                 old_policy_loss.backward()
                 
                 # 1st term 
-                grad = torch.tensor([0.0])
+                grad = torch.tensor([0.0]).to(self.device)
                 
                 for param in self.state_encoder.parameters():
                     grad = torch.cat((grad, param.grad.view(-1)), 0)
@@ -273,7 +273,7 @@ class COPO():
                     grad = torch.cat((grad, param.grad.view(-1)), 0)
                 
                 # 2nd term
-                old_grad = torch.tensor([0.0])
+                old_grad = torch.tensor([0.0]).to(self.device)
                 
                 for param in self.old_state_encoder.parameters():
                     old_grad = torch.cat((old_grad, param.grad.view(-1)), 0)
@@ -296,10 +296,48 @@ class COPO():
                 
         return losses
                 
+    def train_mode(self):
+        self.state_encoder.train()
+        self.policy_network.train()
+        self.i_value_network.train()
+        self.n_value_network.train()
+        self.g_value_network.train()
+        self.LCF_dist.train()
+        
+    def eval_mode(self):
+        self.state_encoder.eval()
+        self.policy_network.eval()
+        self.i_value_network.eval()
+        self.n_value_network.eval()
+        self.g_value_network.eval()
+        self.LCF_dist.eval()
         
     def save_model(self, path):
         torch.save({
-            
+            'encoder_state_dict':self.state_encoder.state_dict(),
+            'policy_state_dict':self.policy_network.state_dict(),
+            'i_value_state_dict':self.i_value_network.state_dict(),
+            'n_value_state_dict':self.n_value_network.state_dict(),
+            'g_value_state_dict':self.g_value_network.state_dict(),
+            'lcf_state_dict':self.LCF_dist.state_dict(),
+            'optimizer_state_dict':self.optimizer.state_dict(),
+            'lcf_optimizer_state_dict':self.lcf_optimizer.state_dict()
         }, path)
         
-    
+    def load_ckpt(self, model_path):
+        
+        ckpt = torch.load(model_path)
+        self.state_encoder.load_state_dict(ckpt['encoder_state_dict'])
+        self.policy_network.load_state_dict(ckpt['policy_state_dict'])
+        self.i_value_network.load_state_dict(ckpt['i_value_state_dict'])
+        self.n_value_network.load_state_dict(ckpt['n_value_state_dict'])
+        self.g_value_network.load_state_dict(ckpt['g_value_state_dict'])
+        
+        self.LCF_dist.load_state_dict(ckpt['lcf_state_dict'])
+        
+        self.optimizer.load_state_dict(ckpt['optimizer_state_dict'])
+
+        self.lcf_optimizer.load_state_dict(ckpt['lcf_optimizer_state_dict'])
+
+        return
+        
