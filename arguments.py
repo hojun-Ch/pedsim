@@ -27,19 +27,39 @@ parser.add_argument(
     help='name of each trial'
 )
 
+parser.add_argument(
+    '--worker',
+    type=int,
+    default=0,
+    help='worker id'
+)
 # env path
 parser.add_argument(
     '--home_path',
     type=str,
-    default=os.path.expanduser('~'),
+    default='../',
     help='path to home')
 
 parser.add_argument(
     '--env_path',
     type=str,
-    default="/Unity/first pedsim/",
+    default="first pedsim/",
     help='path from home to env folder')
+
+# archive
+parser.add_argument(
+    '--archive_frequency',
+    type=int,
+    default=10,
+    help='Model save frequency'
+)
 # for COPO training
+parser.add_argument(
+    '--train_lcf',
+    type=str2bool,
+    default=True,
+    help='train lcf or not'
+)
 parser.add_argument(
     '--rendering',
     type=str2bool,
@@ -223,7 +243,7 @@ parser.add_argument(
 parser.add_argument(
     '--eval_frequency',
     type=int,
-    default=10,
+    default=1,
     help='evaluation frequency'
 )
 

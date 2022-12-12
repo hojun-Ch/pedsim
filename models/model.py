@@ -145,12 +145,18 @@ class lcfNetwork(nn.Module):
         self.mean = nn.Parameter(torch.tensor([0.0], requires_grad=True))
         self.log_std = nn.Parameter(torch.tensor([-2.3]), requires_grad=True)
         
-    def forward(self, x):
+    def forward(self, x, batch_size):
 
         normal_layer = Normal(self.mean, torch.exp(self.log_std))
         
-        lcf = normal_layer.sample()
-        
-        print(lcf)
-        
+        lcf = normal_layer.rsample(torch.Size([batch_size]))
+                
         return lcf
+    
+    def get_log_prob(self, lcf):
+        
+        normal_layer = Normal(self.mean, torch.exp(self.log_std))
+        
+        log_prob = normal_layer.log_prob(lcf)
+        
+        return log_prob

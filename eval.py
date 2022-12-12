@@ -23,7 +23,7 @@ def eval_bypass(args, agent):
     env_path = home_path + args.env_path + "eval_bypass.x86_64"
     
     channel = EngineConfigurationChannel()
-    unity_env = UE(file_name = env_path, seed=1, side_channels=[channel], no_graphics=not args.rendering)
+    unity_env = UE(file_name = env_path, seed=1, side_channels=[channel], no_graphics=not args.rendering, worker_id=args.worker)
     
     env = UnityToGymWrapper(unity_env, uint8_visual=False, allow_multiple_obs=True)
     channel.set_configuration_parameters(time_scale = 1.0)
@@ -49,24 +49,26 @@ def eval_bypass(args, agent):
     obs = env.reset()
     
     episode_return = 0
+    episode_coll = 0
     
     for i in range(args.rollout_length):
         prev_obs = obs[0]
         img, feature = obs_to_img_feature(obs, goal, args.map_length, args.map_width, args.scale, args.img_size, args.num_ped, args.feature_dim, args.neighbor_distance)
         action, log_prob, value, n_value, g_value = agent.act(img, feature)
         obs, __, __, __ = env.step(action.reshape(-1))
-        g_reward = obs_to_global_reward(obs, prev_obs, goal, args.map_length, args.map_width, args.num_ped, args.coll_penalty, args.neighbor_distance)
+        g_reward, g_coll = obs_to_global_reward(obs, prev_obs, goal, args.map_length, args.map_width, args.num_ped, args.coll_penalty, args.neighbor_distance)
         episode_return += g_reward
+        episode_coll += g_coll
     
     env.close()
-    return episode_return
+    return episode_return, episode_coll
 
 def eval_crossing(args, agent):
     home_path = args.home_path
     env_path = home_path + args.env_path + "eval_crossing.x86_64"
     
     channel = EngineConfigurationChannel()
-    unity_env = UE(file_name = env_path, seed=1, side_channels=[channel], no_graphics=not args.eval_rendering)
+    unity_env = UE(file_name = env_path, seed=1, side_channels=[channel], no_graphics=not args.eval_rendering, worker_id=args.worker)
     
     env = UnityToGymWrapper(unity_env, uint8_visual=False, allow_multiple_obs=True)
     channel.set_configuration_parameters(time_scale = 1.0)
@@ -92,24 +94,25 @@ def eval_crossing(args, agent):
     obs = env.reset()
     
     episode_return = 0
+    episode_coll = 0
     
     for i in range(args.rollout_length):
         prev_obs = obs[0]
         img, feature = obs_to_img_feature(obs, goal, args.map_length, args.map_width, args.scale, args.img_size, args.num_ped, args.feature_dim, args.neighbor_distance)
         action, log_prob, value, n_value, g_value = agent.act(img, feature)
         obs, __, __, __ = env.step(action.reshape(-1))
-        g_reward = obs_to_global_reward(obs, prev_obs, goal, args.map_length, args.map_width, args.num_ped, args.coll_penalty, args.neighbor_distance)
+        g_reward, g_coll = obs_to_global_reward(obs, prev_obs, goal, args.map_length, args.map_width, args.num_ped, args.coll_penalty, args.neighbor_distance)
         episode_return += g_reward
-    
+        episode_coll += g_coll
     env.close()
-    return episode_return
+    return episode_return, episode_coll
 
 def eval_spread(args, agent):
     home_path = args.home_path
     env_path = home_path + args.env_path + "eval_spread.x86_64"
     
     channel = EngineConfigurationChannel()
-    unity_env = UE(file_name = env_path, seed=1, side_channels=[channel], no_graphics=not args.eval_rendering)
+    unity_env = UE(file_name = env_path, seed=1, side_channels=[channel], no_graphics=not args.eval_rendering, worker_id=args.worker)
     
     env = UnityToGymWrapper(unity_env, uint8_visual=False, allow_multiple_obs=True)
     channel.set_configuration_parameters(time_scale = 1.0)
@@ -147,16 +150,18 @@ def eval_spread(args, agent):
     obs = env.reset()
     
     episode_return = 0
+    episode_coll = 0
     
     for i in range(args.rollout_length):
         prev_obs = obs[0]
         img, feature = obs_to_img_feature(obs, goal, args.map_length, args.map_width, args.scale, args.img_size, args.num_ped, args.feature_dim, args.neighbor_distance)
         action, log_prob, value, n_value, g_value = agent.act(img, feature)
         obs, __, __, __ = env.step(action.reshape(-1))
-        g_reward = obs_to_global_reward(obs, prev_obs, goal, args.map_length, args.map_width, args.num_ped, args.coll_penalty, args.neighbor_distance)
+        g_reward, g_coll = obs_to_global_reward(obs, prev_obs, goal, args.map_length, args.map_width, args.num_ped, args.coll_penalty, args.neighbor_distance)
         episode_return += g_reward
+        episode_coll += g_coll
     env.close()
-    return episode_return
+    return episode_return, episode_coll
 
 if __name__ == '__main__':
     

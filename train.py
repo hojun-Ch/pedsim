@@ -23,7 +23,8 @@ if __name__ == '__main__':
     # get and save args
     args = parser.parse_args()
     
-    wandb.init(project="pedsim_"+args.name, reinit=True)
+    wandb.init(project="pedsim_demo", reinit=True, entity="hojun-chung")
+    wandb.run.name = args.name
     
     wandb.config.update(args)
     with open(args.name+'_args.txt', 'w') as f:
@@ -49,10 +50,10 @@ if __name__ == '__main__':
         
         channel = EngineConfigurationChannel()
 
-        unity_env = UE(file_name = env_path + "pedsim_demo.x86_64", seed=seed[j], side_channels=[channel], no_graphics=not args.rendering)
+        unity_env = UE(file_name = env_path + "pedsim_demo.x86_64", seed=seed[j], side_channels=[channel], no_graphics=not args.rendering, worker_id = args.worker)
 
         env = UnityToGymWrapper(unity_env, uint8_visual=False, allow_multiple_obs=True)
-        channel.set_configuration_parameters(time_scale = 16.0)
+        channel.set_configuration_parameters(time_scale = 1.0)
         
         obs = env.reset()
         goal = np.random.uniform(-0.9, 0.9, args.num_ped * 2)
@@ -61,13 +62,16 @@ if __name__ == '__main__':
         print("collecting rollout.....")
 
         # collect rollout
+        train_global_return = 0
+        train_collision = 0
         for i in range(args.rollout_length):
             prev_obs = obs[0]
             img, feature = obs_to_img_feature(obs, goal, args.map_length, args.map_width, args.scale, args.img_size, args.num_ped, args.feature_dim, args.neighbor_distance)
             action, log_prob, value, n_value, g_value = agent.act(img, feature)
             obs, __, __, __ = env.step(action.reshape(-1))
-            reward, n_reward, g_reward = obs_to_reward(obs, prev_obs, goal, args.map_length, args.map_width, args.num_ped, args.coll_penalty, args.neighbor_distance)
-
+            reward, n_reward, g_reward, global_reward_wo_coll, global_coll = obs_to_reward(obs, prev_obs, goal, args.map_length, args.map_width, args.num_ped, args.coll_penalty, args.neighbor_distance)
+            train_global_return += global_reward_wo_coll
+            train_collision +=  global_coll
             if i == 0:
                 agent.rollout_buffer.add(feature, img, action, reward, n_reward, g_reward, np.array([1] * args.num_ped), value, n_value, g_value, log_prob)
             elif i == args.rollout_length - 1:
@@ -85,10 +89,11 @@ if __name__ == '__main__':
         print("updating....")
         
         # update policy 
-        lcf, pg_losses, clip_fraction, i_value_loss, n_value_loss, g_value_loss = agent.update_policy()
+        pg_losses, clip_fraction, i_value_loss, n_value_loss, g_value_loss = agent.update_policy()
         
         #  update lcf
-        lcf_loss = agent.update_lcf(lcf)
+        lcf_loss = agent.update_lcf()
+        lcf_mean = agent.LCF_dist.mean.item()
         
         # reset buffer 
         agent.rollout_buffer.reset()
@@ -99,19 +104,19 @@ if __name__ == '__main__':
             
             agent.eval_mode()
             
-            bypass_return = eval_bypass(args, agent)
-            print("bypass_return:", bypass_return)
-            crossing_return = eval_crossing(args, agent)
-            print("crossing_return:", bypass_return)
-            spread_return = eval_spread(args, agent)
-            print("spread_return:", bypass_return)
+            bypass_return, bypass_coll = eval_bypass(args, agent)
+            crossing_return, crossing_coll = eval_crossing(args, agent)
+            spread_return, spread_coll = eval_spread(args, agent)
             
-            agent.save_model(args.model_path + args.name + "/model_%05d.pt"%j)
             
             if bypass_return + crossing_return + spread_return > best_return:
+                best_return = bypass_return + crossing_return + spread_return
                 agent.save_model(args.model_path + args.name + "/model_best.pt")
         
         # logging
+        
+        if j % args.archive_frequency == 0:
+            agent.save_model(args.model_path + args.name + "/model_%05d.pt"%j)
         
         for i in range(len(pg_losses)):
             wandb.log({
@@ -120,10 +125,16 @@ if __name__ == '__main__':
                 'independent value losses': i_value_loss[i],
                 'neighbor value losses':n_value_loss[i],
                 'global value losses': g_value_loss[i],
-                'LCF losses': sum(lcf_loss) / len(lcf_loss),
+                'LCF losses': lcf_loss[i],
+                'LCF mean': lcf_mean,
                 'bypass eval returns': bypass_return,
+                'bypass_eval_collisions': bypass_coll,
                 'crossing eval returns': crossing_return,
-                'spread eval returns': spread_return
+                "crossing_eval_collisions": crossing_coll,
+                'spread eval returns': spread_return,
+                'spread_eval_collisions': spread_coll,
+                'train_return': train_global_return,
+                'train_collision': train_collision
             })
 
         
