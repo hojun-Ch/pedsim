@@ -232,6 +232,8 @@ class COPO():
     def update_lcf(self):
         losses = []
         clip_range = self.clip_range
+        
+        
         for epoch in range(self.lcf_epochs):
             for rollout_data in self.rollout_buffer.get(self.batch_size):
                 
@@ -245,11 +247,6 @@ class COPO():
                 i_advantages = rollout_data.i_advantages
                 n_advantages = rollout_data.n_advantages
                 g_advantages = rollout_data.g_advantages
-                
-                if self.normalize_advantage:
-                    i_advantages = (i_advantages - i_advantages.mean()) / (i_advantages.std() + 1e-8)
-                    n_advantages = (n_advantages - n_advantages.mean()) / (n_advantages.std() + 1e-8)
-                    g_advantages = (g_advantages - g_advantages.mean()) / (g_advantages.std() + 1e-8)
                 
                 # sample lcf
                 lcf = self.LCF_dist(torch.tensor([0.0]).to(self.device), i_advantages.shape[0])

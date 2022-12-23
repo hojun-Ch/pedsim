@@ -79,6 +79,8 @@ class PolicyNetwork(nn.Module):
         self.log_std = nn.Parameter(torch.zeros(action_dim, requires_grad=True))
         
     def forward(self, obs):
+        
+        print(obs.shape)
 
         mu = self.layer(obs)
         
@@ -96,6 +98,67 @@ class PolicyNetwork(nn.Module):
         return action, log_prob
 
     def evaluate_action(self, obs, action):
+        
+        mu = self.layer(obs)
+        
+        normal_layer = Normal(mu, torch.exp(self.log_std))
+        
+        log_prob = normal_layer.log_prob(action)
+        
+        if len(log_prob.shape) > 1:
+            log_prob = log_prob.sum(dim=1)
+        else:
+            log_prob = log_prob.sum()
+            
+        entropy = normal_layer.entropy()
+        
+        if len(entropy.shape) > 1:
+            entropy = entropy.sum(dim=1)
+        else:
+            entropy = entropy.sum()
+        
+        return log_prob, entropy
+    
+class PolicyNetwork_cond(nn.Module):
+    
+    def __init__(self, args):
+        super().__init__()
+        num_hidden = args.policy_num_hidden
+        obs_dimension = args.encoder_num_hidden
+        action_dim = args.action_dim
+        
+        self.layer = nn.Sequential(
+            nn.Linear(obs_dimension + 1, num_hidden),
+            nn.ReLU(),
+            nn.Linear(num_hidden, num_hidden),
+            nn.ReLU(),
+            nn.Linear(num_hidden, action_dim)
+        )
+        
+        self.log_std = nn.Parameter(torch.zeros(action_dim, requires_grad=True))
+        
+    def forward(self, obs, lcf):
+        
+        obs = torch.cat((obs,lcf), dim=1)
+        
+        mu = self.layer(obs)
+        
+        normal_layer = Normal(mu, torch.exp(self.log_std))
+        
+        action = normal_layer.sample()
+        
+        log_prob = normal_layer.log_prob(action)
+                
+        if len(log_prob.shape) > 1:
+            log_prob = log_prob.sum(dim=1)
+        else:
+            log_prob = log_prob.sum()
+        
+        return action, log_prob
+
+    def evaluate_action(self, obs, action, lcf):
+        
+        obs = torch.cat((obs,lcf.reshape(-1,1)), dim=1)
         
         mu = self.layer(obs)
         

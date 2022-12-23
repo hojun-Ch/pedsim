@@ -32,6 +32,7 @@ class RolloutBufferSamples(NamedTuple):
     i_returns: torch.Tensor
     n_returns: torch.Tensor
     g_returns: torch.Tensor
+    lcf: torch.Tensor
     
 
 
@@ -183,6 +184,7 @@ class RolloutBuffer(BaseBuffer):
         self.surroundings, self.n_rewards, self.n_advantages, self.g_rewards, self.g_advantages = None, None, None, None, None
         self.returns, self.episode_starts, self.values, self.log_probs = None, None, None, None
         self.n_returns, self.g_returns, self.n_values, self.g_values = None, None, None, None
+        self.lcf = None
         self.generator_ready = False
         self.reset()
 
@@ -205,6 +207,7 @@ class RolloutBuffer(BaseBuffer):
         self.g_returns = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
         self.g_values = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
         self.g_advantages = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
+        self.lcf = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
         self.generator_ready = False
         super().reset()
 
@@ -278,6 +281,7 @@ class RolloutBuffer(BaseBuffer):
         n_value: torch.Tensor,
         g_value: torch.Tensor,
         log_prob: torch.Tensor,
+        lcf: np.ndarray
     ) -> None:
         """
         :param obs: Observation
@@ -307,6 +311,7 @@ class RolloutBuffer(BaseBuffer):
         self.n_values[self.pos] = n_value.clone().cpu().numpy().flatten()
         self.g_values[self.pos] = g_value.clone().cpu().numpy().flatten()
         self.log_probs[self.pos] = log_prob.clone().cpu().numpy()
+        self.lcf[self.pos] = np.array(lcf).copy()
         self.pos += 1
         if self.pos == self.buffer_size:
             self.full = True
@@ -330,7 +335,8 @@ class RolloutBuffer(BaseBuffer):
                 "g_advantages",
                 "returns",
                 "n_returns",
-                "g_returns"
+                "g_returns",
+                "lcf"
             ]
 
             for tensor in _tensor_names:
@@ -360,6 +366,7 @@ class RolloutBuffer(BaseBuffer):
             self.g_advantages[batch_inds].flatten(),
             self.returns[batch_inds].flatten(),
             self.n_returns[batch_inds].flatten(),
-            self.g_returns[batch_inds].flatten()
+            self.g_returns[batch_inds].flatten(),
+            self.lcf[batch_inds].flatten()
         )
         return RolloutBufferSamples(*tuple(map(self.to_torch, data)))
